@@ -10,7 +10,7 @@ export default class dSyncFiles {
     constructor({
                     app = null
                 } = {}) {
-        // soem shit
+        // not really used lol
     }
 
 
