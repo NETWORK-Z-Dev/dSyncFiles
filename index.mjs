@@ -3,6 +3,8 @@ import path from "path";
 import fs from "fs";
 import Logger from "@hackthedev/terminal-logger";
 import {fileTypeFromBuffer} from "file-type";
+import express from "express";
+import crypto from "crypto";
 
 export default class dSyncFiles {
     constructor({
@@ -48,6 +50,7 @@ export default class dSyncFiles {
             getMaxMB = null,
             getMaxFolderSizeMB = null,
             getAllowedMimes = null,
+            canAccessFiles = null
             canUpload = null,
             onFinish = null
         } = limits;
@@ -63,11 +66,29 @@ export default class dSyncFiles {
         // create the upload folder if it doesnt exist yet
         if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, {recursive: true})
 
+
+        const accessMw = canAccessFiles
+            ? canAccessFiles
+            : (req, res, next) => next();
+
+        app.get(urlPath + "/:id", accessMw, (req, res) => {
+            const filePath = path.join(uploadPath, req.params.id);
+
+            if (!fs.existsSync(filePath)) {
+                return res.sendStatus(404);
+            }
+
+            res.sendFile(filePath);
+        });
+
+
         app.post(urlPath, async (req, res) => {
             try {
                 const {
-                    filename, chunkIndex, totalChunks, fileId
+                    filename, chunkIndex, totalChunks
                 } = req.query;
+
+                const fileId = crypto.randomUUID()
 
                 // check if allowed to upload if set
                 if (canUpload && !(await canUpload(req))) {
