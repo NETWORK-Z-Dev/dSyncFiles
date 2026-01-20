@@ -70,16 +70,19 @@ export default class dSyncFiles {
             ? canAccessFiles
             : (req, res, next) => next();
 
-        app.get(urlPath + "/:id", accessMw, (req, res) => {
+        app.get(urlPath + "/:id", accessMw, async (req, res) => {
             const filePath = path.join(uploadPath, req.params.id);
+            if (!fs.existsSync(filePath)) return res.sendStatus(404);
 
-            if (!fs.existsSync(filePath)) {
-                return res.sendStatus(404);
+            const buf = fs.readFileSync(filePath);
+            const type = await fileTypeFromBuffer(buf);
+
+            if (type?.mime) {
+                res.setHeader("Content-Type", type.mime);
             }
 
-            res.sendFile(filePath);
+            res.send(buf);
         });
-
 
         app.post(urlPath, async (req, res) => {
             try {
@@ -149,7 +152,7 @@ export default class dSyncFiles {
                         const existing = fs.readdirSync(dir).find(n => n.startsWith(hash));
                         if (existing) {
                             fs.unlinkSync(temp);
-                            return res.json({ok: true, exists: true, path: path.join(uploadPath, existing)});
+                            return res.json({ok: true, exists: true, path: path.join(urlPath, existing)});
                         }
 
                         const finalName = `${hash}`;
@@ -157,7 +160,7 @@ export default class dSyncFiles {
 
                         if(onFinish) await onFinish(req);
 
-                        return res.json({ok: true, exists: false, path: path.join(uploadPath, finalName)});
+                        return res.json({ok: true, exists: false, path: path.join(urlPath, finalName)});
 
                     } catch (err) {
                         Logger.error("Upload Final Err", err);
