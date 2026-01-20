@@ -4,7 +4,6 @@ import fs from "fs";
 import Logger from "@hackthedev/terminal-logger";
 import {fileTypeFromBuffer} from "file-type";
 import express from "express";
-import crypto from "crypto";
 
 export default class dSyncFiles {
     constructor({
@@ -50,7 +49,7 @@ export default class dSyncFiles {
             getMaxMB = null,
             getMaxFolderSizeMB = null,
             getAllowedMimes = null,
-            canAccessFiles = null
+            canAccessFiles = null,
             canUpload = null,
             onFinish = null
         } = limits;
