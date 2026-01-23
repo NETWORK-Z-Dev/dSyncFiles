@@ -2,7 +2,7 @@ import crypto from "crypto";
 import path from "path";
 import fs from "fs";
 import Logger from "@hackthedev/terminal-logger";
-import {fileTypeFromBuffer} from "file-type";
+import { fileTypeFromBuffer } from "file-type";
 import express from "express";
 
 export default class dSyncFiles {
@@ -12,11 +12,10 @@ export default class dSyncFiles {
         // not really used lol
     }
 
-
     getFolderSize(folderPath) {
         const files = fs.readdirSync(folderPath);
         return files.reduce((total, file) => {
-            const {size} = fs.statSync(path.join(folderPath, file));
+            const { size } = fs.statSync(path.join(folderPath, file));
             return total + size;
         }, 0);
     };
@@ -63,17 +62,18 @@ export default class dSyncFiles {
         if(!getAllowedMimes) throw new Error("Missing getAllowedMimes");
 
         // create the upload folder if it doesnt exist yet
-        if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, {recursive: true})
-
+        if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
 
         const accessMw = canAccessFiles
             ? canAccessFiles
             : (req, res, next) => next();
 
         app.get(urlPath + "/:id", accessMw, async (req, res) => {
-            const filePath = path.join(uploadPath, req.params.id);
-            if (!fs.existsSync(filePath)) return res.sendStatus(404);
+            const id = req.params.id;
+            const file = fs.readdirSync(uploadPath).find(f => f === id || f.startsWith(id + "."));
+            if (!file) return res.sendStatus(404);
 
+            const filePath = path.join(uploadPath, file);
             const buf = fs.readFileSync(filePath);
             const type = await fileTypeFromBuffer(buf);
 
@@ -91,10 +91,12 @@ export default class dSyncFiles {
         app.post(urlPath, async (req, res) => {
             try {
                 const {
-                    filename, chunkIndex, totalChunks
+                    filename, chunkIndex, totalChunks, fileId
                 } = req.query;
 
-                const fileId = crypto.randomUUID()
+                if (!fileId) {
+                    return res.status(400).json({ ok: false, error: "missing_fileId" });
+                }
 
                 // check if allowed to upload if set
                 if (canUpload && !(await canUpload(req))) {
@@ -102,7 +104,6 @@ export default class dSyncFiles {
                 }
 
                 const urlJoin = (...p) => p.join("/").replace(/\/+/g, "/");
-
 
                 let headerBuf = Buffer.alloc(0);
                 let fullBodyChunks = [];
@@ -114,7 +115,6 @@ export default class dSyncFiles {
                             headerBuf = headerBuf.slice(0, 5000);
                         }
                     }
-
                     fullBodyChunks.push(chunk);
                 });
 
@@ -127,57 +127,66 @@ export default class dSyncFiles {
                         const maxBytes = (await getMaxMB(req) || 1) * 1024 * 1024; // default 1 mb
 
                         if (chunkIndex == 0 &&
-                            this.getFolderSize(dir) >= Number(await getMaxFolderSizeMB(req)) * 1024 * 1024) return res.status(507).json({
-                                                                                                                                         ok: false,
-                                                                                                                                         error: "storage_full"
-                                                                                                                                     });
+                            this.getFolderSize(dir) >= Number(await getMaxFolderSizeMB(req)) * 1024 * 1024)
+                            return res.status(507).json({ ok: false, error: "storage_full" });
 
-                        const temp = path.join(dir, `${fileId}_${clean}`);
+                        const temp = path.join(dir, `${fileId}_${clean}.part`);
+                        const meta = path.join(dir, `${fileId}.meta.json`);
 
                         let allowedMimeTypes = await getAllowedMimes(req);
                         if (chunkIndex == 0) {
-                            const {mime} = (await fileTypeFromBuffer(headerBuf)) || {};
-                            if (!mime || !allowedMimeTypes.includes(mime)) return res.status(415).json({
-                                                                                                           ok: false,
-                                                                                                           error: "mime_not_allowed"
-                                                                                                       });
+                            const { mime } = (await fileTypeFromBuffer(headerBuf)) || {};
+                            if (!mime || !allowedMimeTypes.includes(mime))
+                                return res.status(415).json({ ok: false, error: "mime_not_allowed" });
 
+                            if (fs.existsSync(temp)) fs.unlinkSync(temp);
                             fs.writeFileSync(temp, Buffer.alloc(0));
+                            fs.writeFileSync(meta, JSON.stringify({ mime }));
                         }
 
                         const current = fs.existsSync(temp) ? fs.statSync(temp).size : 0;
                         const next = current + fullBody.length;
 
-                        if (next > maxBytes) return res.status(413).json({ok: false, error: "file_too_large"});
+                        if (next > maxBytes)
+                            return res.status(413).json({ ok: false, error: "file_too_large" });
 
                         fs.appendFileSync(temp, fullBody);
 
-                        if (Number(chunkIndex) + 1 < Number(totalChunks)) return res.json({ok: true, part: true});
+                        if (Number(chunkIndex) + 1 < Number(totalChunks))
+                            return res.json({ ok: true, part: true });
 
-                        const hash = this.getFileHash(temp)
+                        const hash = this.getFileHash(temp);
+
+                        let mimeType = null;
+                        if (fs.existsSync(meta)) {
+                            mimeType = JSON.parse(fs.readFileSync(meta, "utf8")).mime;
+                            fs.unlinkSync(meta);
+                        }
+
+                        const ext = mimeType ? mimeType.split("/")[1] : "bin";
+                        const finalName = `${hash}.${ext}`;
 
                         const existing = fs.readdirSync(dir).find(n => n.startsWith(hash));
                         if (existing) {
                             fs.unlinkSync(temp);
-                            return res.json({ok: true, exists: true, path: urlJoin(urlPath, existing)});
+                            return res.json({ ok: true, exists: true, path: urlJoin(urlPath, existing) });
                         }
 
-                        const finalName = `${hash}`;
                         fs.renameSync(temp, path.join(dir, finalName));
 
-                        if(onFinish) await onFinish(req);
+                        if (onFinish) await onFinish(req);
 
-                        return res.json({ok: true, exists: false, path: urlJoin(urlPath, finalName)});
+                        return res.json({ ok: true, exists: false, path: urlJoin(urlPath, hash) });
 
                     } catch (err) {
                         Logger.error("Upload Final Err", err);
-                        return res.status(500).json({ok: false, error: "server_error"});
+                        return res.status(500).json({ ok: false, error: "server_error" });
                     }
                 });
 
             } catch (err) {
                 Logger.error("Upload Error", err);
-                return res.status(500).json({ok: false, error: "server_error"});
+                return res.status(500).json({ ok: false, error: "server_error" });
             }
         });
     }
