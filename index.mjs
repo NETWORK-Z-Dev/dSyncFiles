@@ -77,8 +77,12 @@ export default class dSyncFiles {
             const buf = fs.readFileSync(filePath);
             const type = await fileTypeFromBuffer(buf);
 
+            res.setHeader("Content-Disposition", "inline");
+
             if (type?.mime) {
                 res.setHeader("Content-Type", type.mime);
+            } else {
+                res.setHeader("Content-Type", "application/octet-stream");
             }
 
             res.send(buf);
