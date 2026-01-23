@@ -97,6 +97,9 @@ export default class dSyncFiles {
                     return res.status(403).json({ ok: false });
                 }
 
+                const urlJoin = (...p) => p.join("/").replace(/\/+/g, "/");
+
+
                 let headerBuf = Buffer.alloc(0);
                 let fullBodyChunks = [];
 
@@ -152,7 +155,7 @@ export default class dSyncFiles {
                         const existing = fs.readdirSync(dir).find(n => n.startsWith(hash));
                         if (existing) {
                             fs.unlinkSync(temp);
-                            return res.json({ok: true, exists: true, path: path.join(urlPath, existing)});
+                            return res.json({ok: true, exists: true, path: urlJoin(urlPath, existing)});
                         }
 
                         const finalName = `${hash}`;
@@ -160,7 +163,7 @@ export default class dSyncFiles {
 
                         if(onFinish) await onFinish(req);
 
-                        return res.json({ok: true, exists: false, path: path.join(urlPath, finalName)});
+                        return res.json({ok: true, exists: false, path: urlJoin(urlPath, finalName)});
 
                     } catch (err) {
                         Logger.error("Upload Final Err", err);
