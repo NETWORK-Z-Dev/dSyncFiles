@@ -1,6 +1,6 @@
 {
   "name": "@hackthedev/dsync-files",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "As another member of the dSync Concept, its job is to handle file uploads and access to them via highly dynamic parameters. The idea is to make it as flexible as possible and easy to maintain so it can be used in multiple projects.",
   "homepage": "https://github.com/NETWORK-Z-Dev/dSyncFiles#readme",
   "bugs": {
