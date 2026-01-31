@@ -174,7 +174,15 @@ export default class dSyncFiles {
 
                         fs.renameSync(temp, path.join(dir, finalName));
 
-                        if (onFinish) await onFinish(req);
+                        if (onFinish) {
+                            await onFinish(req, {
+                                hash,
+                                mimeType,
+                                ext,
+                                finalName,
+                                finalPath: path.join(dir, finalName)
+                            });
+                        }
 
                         return res.json({ ok: true, exists: false, path: urlJoin(urlPath, hash) });
 
