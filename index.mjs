@@ -49,6 +49,7 @@ export default class dSyncFiles {
             getMaxFolderSizeMB = null,
             getAllowedMimes = null,
             canAccessFiles = null,
+            onFileAccess = null,
             canUpload = null,
             onFinish = null
         } = limits;
@@ -86,6 +87,8 @@ export default class dSyncFiles {
             }
 
             res.send(buf);
+
+            if(onFileAccess) await onFileAccess(req);
         });
 
         app.post(urlPath, async (req, res) => {
