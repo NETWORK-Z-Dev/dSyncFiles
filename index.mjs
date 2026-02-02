@@ -66,7 +66,15 @@ export default class dSyncFiles {
         if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
 
         const accessMw = canAccessFiles
-            ? canAccessFiles
+            ? async (req, res, next) => {
+                try {
+                    const allowed = await canAccessFiles(req);
+                    if (!allowed) return res.sendStatus(403);
+                    next();
+                } catch (e) {
+                    return res.sendStatus(500);
+                }
+            }
             : (req, res, next) => next();
 
         app.get(urlPath + "/:id", accessMw, async (req, res) => {
