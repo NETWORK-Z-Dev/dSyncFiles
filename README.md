@@ -61,9 +61,14 @@ files.registerFileUploadHandle({
             // optional, default will always allow access.
             // you could implement some sort of file verification feature or 
             // paywall content uploaded by creators.
-            if (!req.user) return res.sendStatus(403);
-            next();
+            if (!req.user) return false;
+            return true
         },
+        
+        onFileAccess: async (req) => {
+                let fileName = req.params.id;            
+            	// you can make a view system or add a rate limit 
+            },
 
         onFinish: async (req) => {
             // optional.
