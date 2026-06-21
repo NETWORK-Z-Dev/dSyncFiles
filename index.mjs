@@ -120,7 +120,7 @@ export default class dSyncFiles {
             if(onFileAccess) await onFileAccess(req);
         });
 
-        app.post(urlPath, async (req, res) => {
+        app.post(urlPath, corsMw, async (req, res) => {
             try {
                 const filename = decodeURIComponent(req.headers["x-file-name"] ?? "");
                 const chunkIndex = req.headers["x-chunk-index"];
