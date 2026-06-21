@@ -101,15 +101,23 @@ export default class dSyncFiles {
 
         app.post(urlPath, async (req, res) => {
             try {
-                const {
-                    filename, chunkIndex, totalChunks, fileId
-                } = req.query;
+                const filename = decodeURIComponent(req.headers["x-file-name"] ?? "");
+                const chunkIndex = req.headers["x-chunk-index"];
+                const totalChunks = req.headers["x-total-chunks"];
+                const fileId = req.headers["x-file-id"];
 
-                if (!fileId) {
+                if (!filename)
+                    return res.status(400).json({ ok: false, error: "missing_filename" });
+
+                if (chunkIndex === undefined)
+                    return res.status(400).json({ ok: false, error: "missing_chunkIndex" });
+
+                if (totalChunks === undefined)
+                    return res.status(400).json({ ok: false, error: "missing_totalChunks" });
+
+                if (!fileId)
                     return res.status(400).json({ ok: false, error: "missing_fileId" });
-                }
 
-                // check if allowed to upload if set
                 if (canUpload && !(await canUpload(req))) {
                     return res.status(403).json({ ok: false });
                 }
@@ -135,7 +143,8 @@ export default class dSyncFiles {
                         const clean = this.sanitizeFilename(filename);
                         const dir = uploadPath;
 
-                        const maxBytes = (await getMaxMB(req) || 1) * 1024 * 1024; // default 1 mb
+                        const maxMB = await getMaxMB(req);
+                        const maxBytes = Number(maxMB ?? 1) * 1024 * 1024;
 
                         if (chunkIndex == 0 &&
                             this.getFolderSize(dir) >= Number(await getMaxFolderSizeMB(req)) * 1024 * 1024)
