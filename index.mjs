@@ -98,7 +98,10 @@ export default class dSyncFiles {
             }
             : (req, res, next) => next();
 
-        app.get(urlPath + "/:id", accessMw, async (req, res) => {
+        app.options(urlPath, corsMw);
+        app.options(urlPath + "/:id", corsMw);
+        
+        app.get(urlPath + "/:id", corsMw, accessMw, async (req, res) => {
             const id = req.params.id;
             const file = fs.readdirSync(uploadPath).find(f => f === id || f.startsWith(id + "."));
             if (!file) return res.sendStatus(404);
