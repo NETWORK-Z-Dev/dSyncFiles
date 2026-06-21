@@ -48,6 +48,7 @@ export default class dSyncFiles {
             getMaxMB = null,
             getMaxFolderSizeMB = null,
             getAllowedMimes = null,
+            getUploadPath = null,
             canAccessFiles = null,
             onFileAccess = null,
             canUpload = null,
@@ -141,7 +142,13 @@ export default class dSyncFiles {
                     try {
                         const fullBody = Buffer.concat(fullBodyChunks);
                         const clean = this.sanitizeFilename(filename);
-                        const dir = uploadPath;
+                        const dir = getUploadPath ? await getUploadPath(req) : uploadPath;
+
+                        if (!dir)
+                            return res.status(500).json({ ok: false, error: "missing_upload_path" });
+
+                        if (!fs.existsSync(dir))
+                            fs.mkdirSync(dir, { recursive: true });
 
                         const maxMB = await getMaxMB(req);
                         const maxBytes = Number(maxMB ?? 1) * 1024 * 1024;
