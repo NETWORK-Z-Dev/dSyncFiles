@@ -52,7 +52,8 @@ export default class dSyncFiles {
             canAccessFiles = null,
             onFileAccess = null,
             canUpload = null,
-            onFinish = null
+            onFinish = null,
+            getCorsHeaders = null,
         } = limits;
 
         if(!app) throw new Error("Missing epxress app instance");
@@ -71,6 +72,25 @@ export default class dSyncFiles {
                 try {
                     const allowed = await canAccessFiles(req);
                     if (!allowed) return res.sendStatus(403);
+                    next();
+                } catch (e) {
+                    return res.sendStatus(500);
+                }
+            }
+            : (req, res, next) => next();
+
+        const corsMw = getCorsHeaders
+            ? async (req, res, next) => {
+                try {
+                    const headers = await getCorsHeaders(req);
+
+                    for (const [key, value] of Object.entries(headers || {})) {
+                        res.setHeader(key, value);
+                    }
+
+                    if (req.method === "OPTIONS")
+                        return res.sendStatus(204);
+
                     next();
                 } catch (e) {
                     return res.sendStatus(500);
