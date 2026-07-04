@@ -22,10 +22,10 @@ export default class dSyncFiles {
 
     sanitizeFilename(filename) {
         return filename
-            .normalize("NFD")                  // Normalize to decompose accented characters
-            .replace(/[\u0300-\u036f]/g, '')   // Remove diacritical marks
-            .replace(/[^a-zA-Z0-9._-]/g, '_')  // Replace non-alphanumeric chars with _
-            .replace(/\s+/g, '_');             // Replace spaces with underscores
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9._-]/g, '_')
+            .replace(/\s+/g, '_');
     }
 
     sha256(b) {
@@ -37,6 +37,13 @@ export default class dSyncFiles {
         return this.sha256(finalBuf);
     }
 
+    isUploadPath(basePath, finalPath) {
+        const base = path.resolve(basePath);
+        const final = path.resolve(finalPath);
+
+        return final === base || final.startsWith(base + path.sep);
+    }
+
     async registerFileUploadHandle({
                                        app = null,
                                        urlPath = null,
@@ -44,6 +51,7 @@ export default class dSyncFiles {
                                        limits = {}
                                    }) {
 
+        // some defaults
         const {
             getMaxMB = null,
             getMaxFolderSizeMB = null,
@@ -98,6 +106,7 @@ export default class dSyncFiles {
             }
             : (req, res, next) => next();
 
+        // doesnt seem to work without it
         app.options(urlPath, corsMw);
         app.options(urlPath + "/:id", corsMw);
         
@@ -123,6 +132,7 @@ export default class dSyncFiles {
             if(onFileAccess) await onFileAccess(req);
         });
 
+        // corsMw is there so it can be uploaded from anywhere like the desktop client etc
         app.post(urlPath, corsMw, async (req, res) => {
             try {
                 const filename = decodeURIComponent(req.headers["x-file-name"] ?? "");
@@ -167,12 +177,20 @@ export default class dSyncFiles {
                         const clean = this.sanitizeFilename(filename);
                         const dir = getUploadPath ? await getUploadPath(req) : uploadPath;
 
+                        // some checks lol
                         if (!dir)
                             return res.status(500).json({ ok: false, error: "missing_upload_path" });
+
+                        if (!this.isUploadPath(uploadPath, dir))
+                            return res.status(403).json({ ok: false, error: "invalid_upload_path" });
+
+                        if (!/^[a-zA-Z0-9_-]{8,100}$/.test(fileId))
+                            return res.status(400).json({ ok: false, error: "invalid_fileId" });
 
                         if (!fs.existsSync(dir))
                             fs.mkdirSync(dir, { recursive: true });
 
+                        // checking limits
                         const maxMB = await getMaxMB(req);
                         const maxBytes = Number(maxMB ?? 1) * 1024 * 1024;
 
@@ -183,6 +201,10 @@ export default class dSyncFiles {
                         const temp = path.join(dir, `${fileId}_${clean}.part`);
                         const meta = path.join(dir, `${fileId}.meta.json`);
 
+                        if (!this.isUploadPath(uploadPath, temp) || !this.isUploadPath(uploadPath, meta))
+                            return res.status(403).json({ ok: false, error: "invalid_upload_path" });
+
+                        // allowed file types like uploadFileTypes i think it was called in dcts
                         let allowedMimeTypes = await getAllowedMimes(req);
                         if (chunkIndex == 0) {
                             const { mime } = (await fileTypeFromBuffer(headerBuf)) || {};
@@ -194,6 +216,7 @@ export default class dSyncFiles {
                             fs.writeFileSync(meta, JSON.stringify({ mime }));
                         }
 
+                        // check file size heh
                         const current = fs.existsSync(temp) ? fs.statSync(temp).size : 0;
                         const next = current + fullBody.length;
 
@@ -222,7 +245,12 @@ export default class dSyncFiles {
                             return res.json({ ok: true, exists: true, path: urlJoin(urlPath, existing) });
                         }
 
-                        fs.renameSync(temp, path.join(dir, finalName));
+                        const finalPath = path.join(dir, finalName);
+
+                        if (!this.isUploadPath(uploadPath, finalPath))
+                            return res.status(403).json({ ok: false, error: "invalid_upload_path" });
+
+                        fs.renameSync(temp, finalPath);
 
                         if (onFinish) {
                             await onFinish(req, {
