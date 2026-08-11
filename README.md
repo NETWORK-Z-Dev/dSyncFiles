@@ -26,6 +26,25 @@ files.registerFileUploadHandle({
     urlPath: "/api/upload",
     uploadPath: "./uploads",
     limits: {
+        keepOriginalFilename: async (req) => {
+            // used to toggle if uploaded files should be 
+            // renamed or not.
+            //
+            // If false, files will be renamed to their file hash.
+            // If true, files will keep their original name and extension.
+            return false;
+        },
+        
+        getUploadPath: async (req) => {
+            // allows you to handle different type of uploads depending on your goal.
+            // e.g. profile pictures are stored on /storage/profiles,
+            // mimes and files on /storage/files, ...
+            // 
+            // if you dont need this you can remove this entire block.
+            // [!] Returning 'null' will make any upload fail.
+            return "./uploads"
+        },
+        
         getMaxMB: async (req) => {
             if (!req.user) return 0; // cant upload without account
             
@@ -43,11 +62,33 @@ files.registerFileUploadHandle({
 
         getAllowedMimes: async (req) => {
             // the type of media that can be uploaded
-            return [
-                "image/png",
-                "image/jpeg",
-                "application/pdf"
-            ];
+            // 'allowed' is file content based whereas 'fallback'
+            // is purely based on the file extension.
+            return {
+                allowed: [
+                    "image/png",
+                    "image/jpeg",
+                    "application/pdf",
+                    "application/json",
+                    "text/javascript",
+                    "text/html",
+                    "text/css",
+                    "text/plain",
+                    "text/markdown",
+                ],
+
+                fallback: {
+                    ".json": "application/json",
+                    ".js": "text/javascript",
+                    ".mjs": "text/javascript",
+                    ".cjs": "text/javascript",
+                    ".md": "text/markdown",
+                    ".txt": "text/plain",
+                    ".html": "text/html",
+                    ".css": "text/css",
+                    ".sh": "text/bash",
+                }
+            };
         },
 
         canUpload: async (req) => {
